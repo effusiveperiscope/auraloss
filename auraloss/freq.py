@@ -231,7 +231,7 @@ class STFTLoss(torch.nn.Module):
 
         return x_mag, x_phs
 
-    def forward(self, input: torch.Tensor, target: torch.Tensor):
+    def forward(self, input: torch.Tensor, target: torch.Tensor, weights=None):
         bs, chs, seq_len = input.size()
 
         if self.perceptual_weighting:  # apply optional A-weighting via FIR filter
@@ -278,6 +278,10 @@ class STFTLoss(torch.nn.Module):
             + (self.w_phs * phs_loss)
         )
 
+        if weights is None:
+            weights = torch.ones_like(loss)
+
+        loss = loss * weights
         loss = apply_reduction(loss, reduction=self.reduction)
 
         if self.output == "loss":
@@ -420,20 +424,20 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
                 )
             ]
 
-    def forward(self, x, y):
+    def forward(self, x, y, weights=None):
         mrstft_loss = 0.0
         sc_mag_loss, log_mag_loss, lin_mag_loss, phs_loss = [], [], [], []
 
         for f in self.stft_losses:
             if f.output == "full":  # extract just first term
-                tmp_loss = f(x, y)
+                tmp_loss = f(x, y, weights)
                 mrstft_loss += tmp_loss[0]
                 sc_mag_loss.append(tmp_loss[1])
                 log_mag_loss.append(tmp_loss[2])
                 lin_mag_loss.append(tmp_loss[3])
                 phs_loss.append(tmp_loss[4])
             else:
-                mrstft_loss += f(x, y)
+                mrstft_loss += f(x, y, weights)
 
         mrstft_loss /= len(self.stft_losses)
 
